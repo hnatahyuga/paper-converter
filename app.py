@@ -59,40 +59,27 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    # PINPOINT COORDINATE FIX: Targets cells directly by layout geometry [Row, Column]
-    if len(doc.tables) > 0:
-        header_table = doc.tables[0]
-        
-        # Helper to set text and font safely in blank table blocks
-        def write_cell(cell, text_value):
-            cell.text = "" # wipe anything clean
-            p = cell.paragraphs[0]
-            run = p.add_run(text_value)
-            run.font.name = 'Times New Roman'
-            run.font.size = Pt(11)
-            run.font.bold = True
+    # PLACEHOLDER TEXT SEARCH AND REPLACE ENGINE
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                if "PLACEHOLDER_SUBJECT" in cell.text:
+                    cell.paragraphs[0].text = f"SUBJECT : {subject}"
+                elif "PLACEHOLDER_GRADE" in cell.text:
+                    cell.paragraphs[0].text = f"GRADE : {grade}"
+                elif "PLACEHOLDER_DATE" in cell.text:
+                    cell.paragraphs[0].text = f"DATE : {date}"
+                elif "PLACEHOLDER_MARKS" in cell.text:
+                    cell.paragraphs[0].text = f"MARKS : {marks}"
+                elif "PLACEHOLDER_EXAM" in cell.text:
+                    cell.paragraphs[0].text = exam_title
+                
+                # Apply consistent styling to updated cells
+                if len(cell.paragraphs[0].runs) > 0:
+                    cell.paragraphs[0].runs[0].font.name = 'Times New Roman'
+                    cell.paragraphs[0].runs[0].font.bold = True
 
-        try:
-            # Row 1 (Index 1): Subject Name & Exam Date
-            write_cell(header_table.cell(1, 0), f"SUBJECT : {subject}")
-            write_cell(header_table.cell(1, 1), f"DATE : {date}")
-            
-            # Row 2 (Index 2): Grade / Standard & Marks value
-            write_cell(header_table.cell(2, 0), f"GRADE : {grade}")
-            write_cell(header_table.cell(2, 1), f"MARKS : {marks}")
-            
-            # Row 3 (Index 3): Candidate Name Row Line
-            write_cell(header_table.cell(3, 0), "NAME : __________________________________________________")
-            
-            # Far Right Spanned Multi-row Exam Title Box Block (Row 1, Column 2)
-            write_cell(header_table.cell(1, 2), exam_title)
-        except Exception:
-            # Fallback block locator mapping in case your table cells are counted differently
-            for row in header_table.rows:
-                for cell in row.cells:
-                    pass
-
-    # Clear out prose instruction content layout block below header
+    # Clear instructions placeholder strings below the header
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
