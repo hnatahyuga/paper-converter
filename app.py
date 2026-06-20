@@ -49,22 +49,12 @@ def add_options_grid(doc, options):
                 tcBorders.append(b)
             tcPr.append(tcBorders)
 
-def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_title):
-    reader = pypdf.PdfReader(pdf_file)
-    pdf_lines = []
-    for page in reader.pages:
-        text = page.extract_text()
-        for line in text.split('\n'):
-            if line.strip(): pdf_lines.append(line.strip())
-
-    doc = docx.Document(template_path)
-    
-    # SHORT TAG REPLACEMENT ENGINE
-    for table in doc.tables:
+def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title):
+    """Scans a list of tables and replaces the short tags safely"""
+    for table in tables:
         for row in table.rows:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
-                    # Check if our short tags are anywhere in the paragraph line
                     if "[SUB]" in paragraph.text:
                         paragraph.text = paragraph.text.replace("[SUB]", subject)
                     elif "[GRD]" in paragraph.text:
@@ -76,13 +66,31 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
                     elif "[EXM]" in paragraph.text:
                         paragraph.text = paragraph.text.replace("[EXM]", exam_title)
                     
-                    # Fix font for any modified lines
                     if len(paragraph.runs) > 0:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
                             run.font.bold = True
 
-    # Clear instructions placeholder text below the header box
+def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_title):
+    reader = pypdf.PdfReader(pdf_file)
+    pdf_lines = []
+    for page in reader.pages:
+        text = page.extract_text()
+        for line in text.split('\n'):
+            if line.strip(): pdf_lines.append(line.strip())
+
+    doc = docx.Document(template_path)
+    
+    # FIX: Scan regular body tables
+    replace_tags_in_tables(doc.tables, subject, grade, date, marks, exam_title)
+    
+    # CRITICAL FIX: Scan tables hidden inside the Word PAGE HEADERS
+    for section in doc.sections:
+        replace_tags_in_tables(section.header.tables, subject, grade, date, marks, exam_title)
+        # Also check "first page header" settings if applicable
+        if section.first_page_header:
+            replace_tags_in_tables(section.first_page_header.tables, subject, grade, date, marks, exam_title)
+
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
