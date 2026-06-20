@@ -49,7 +49,7 @@ def add_options_grid(doc, options):
                 tcBorders.append(b)
             tcPr.append(tcBorders)
 
-def process_paper(pdf_file, template_file, subject, grade, date, marks):
+def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_title):
     reader = pypdf.PdfReader(pdf_file)
     pdf_lines = []
     for page in reader.pages:
@@ -57,27 +57,32 @@ def process_paper(pdf_file, template_file, subject, grade, date, marks):
         for line in text.split('\n'):
             if line.strip(): pdf_lines.append(line.strip())
 
-    doc = docx.Document(template_file)
+    doc = docx.Document(template_path)
     
-    # DYNAMIC HEADER FILLING: Look into the table grid and insert user inputs next to the labels
+    # DYNAMIC HEADER FILLING: Targets blank cells next to your template headers
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                if "SUBJECT :" in cell.text and len(cell.text.strip()) <= 10:
-                    cell.paragraphs[0].text = f"SUBJECT : {subject}"
-                elif "GRADE :" in cell.text:
-                    cell.paragraphs[0].text = f"GRADE : {grade}"
-                elif "DATE :" in cell.text and len(cell.text.strip()) <= 7:
-                    cell.paragraphs[0].text = f"DATE : {date}"
-                elif "MARKS :" in cell.text and len(cell.text.strip()) <= 8:
-                    cell.paragraphs[0].text = f"MARKS : {marks}"
+                clean_cell_text = cell.text.upper()
                 
-                # Apply Times New Roman font fix to the edited table text
+                if "SUBJECT :" in clean_cell_text:
+                    cell.paragraphs[0].text = f"SUBJECT : {subject}"
+                elif "GRADE :" in clean_cell_text:
+                    cell.paragraphs[0].text = f"GRADE : {grade}"
+                elif "DATE :" in clean_cell_text:
+                    cell.paragraphs[0].text = f"DATE : {date}"
+                elif "MARKS :" in clean_cell_text:
+                    cell.paragraphs[0].text = f"MARKS : {marks}"
+                # Targets the far right cell (containing Examination / brackets details)
+                elif "EXAMINATION" in clean_cell_text or "[" in clean_cell_text or "FA -" in clean_cell_text:
+                    cell.paragraphs[0].text = exam_title
+                
+                # Re-apply styling to the table cell text
                 if len(cell.paragraphs[0].runs) > 0:
                     cell.paragraphs[0].runs[0].font.name = 'Times New Roman'
                     cell.paragraphs[0].runs[0].font.bold = True
 
-    # Clear out sample instruction lines from the template body
+    # Clear out layout instruction prose below header
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
@@ -87,7 +92,6 @@ def process_paper(pdf_file, template_file, subject, grade, date, marks):
         clean_line = line.strip()
         upper_line = clean_line.upper()
         
-        # Skip top PDF metadata lines entirely so they don't reprint
         if "SUBJECT:" in upper_line or "STANDARD:" in upper_line or "QUESTION PAPER" in upper_line or "MARKS:" in upper_line:
             continue
         if re.match(r'^\(\d+\)$', clean_line):
@@ -154,35 +158,36 @@ def process_paper(pdf_file, template_file, subject, grade, date, marks):
     target_stream.seek(0)
     return target_stream
 
-# --- STREAMLIT INTERFACE WITH INPUT VARIABLE BOXES ---
+# --- STREAMLIT USER INTERFACE ---
 st.set_page_config(page_title="Exam Paper Formatter", page_icon="📄")
-st.title("📄 Custom Question Paper Converter")
-st.write("Enter your header details, upload your files, and instantly download a formatted Word document.")
+st.title("📄 K N Patel Exam Converter")
+st.write("Fill out the exam variables below, upload the raw PDF, and generate your custom formatted Word file instantly.")
 
-# 1. User Inputs (Variables for Header Box)
+# User Inputs (Variables for Header Box)
 col1, col2 = st.columns(2)
 with col1:
     subject_input = st.text_input("Subject Name", value="S.P.C.C.")
     grade_input = st.text_input("Grade / Standard", value="11th GSEB")
+    exam_title_input = st.text_input("Examination Title Box", value="FA – 1 Examination\n[2026-27]")
 with col2:
     date_input = st.text_input("Date of Exam", value="24-06-2026")
     marks_input = st.text_input("Total Marks", value="30")
 
-# 2. File Uploaders
-uploaded_template = st.file_uploader("Upload your Word Letterhead Template (template.docx)", type=["docx"])
+# ONLY ONE UPLOAD BOX: Just the raw PDF paper
 uploaded_pdf = st.file_uploader("Upload Raw PDF Question Paper", type=["pdf"])
 
-if uploaded_template and uploaded_pdf:
+if uploaded_pdf:
     if st.button("✨ Convert Document Now"):
         with st.spinner("Processing custom formatting rules..."):
             try:
                 output_docx = process_paper(
                     uploaded_pdf, 
-                    uploaded_template, 
+                    "template.docx", 
                     subject_input, 
                     grade_input, 
                     date_input, 
-                    marks_input
+                    marks_input,
+                    exam_title_input
                 )
                 st.success("🎉 Conversion Complete!")
                 st.download_button(
