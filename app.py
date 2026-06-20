@@ -59,39 +59,30 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    # DEEP PARAGRAPH LOOP FIX
-    # This checks every single line/paragraph inside every single cell
+    # SHORT TAG REPLACEMENT ENGINE
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
-                    upper_p_text = paragraph.text.upper()
+                    # Check if our short tags are anywhere in the paragraph line
+                    if "[SUB]" in paragraph.text:
+                        paragraph.text = paragraph.text.replace("[SUB]", subject)
+                    elif "[GRD]" in paragraph.text:
+                        paragraph.text = paragraph.text.replace("[GRD]", grade)
+                    elif "[DT]" in paragraph.text:
+                        paragraph.text = paragraph.text.replace("[DT]", date)
+                    elif "[MRK]" in paragraph.text:
+                        paragraph.text = paragraph.text.replace("[MRK]", marks)
+                    elif "[EXM]" in paragraph.text:
+                        paragraph.text = paragraph.text.replace("[EXM]", exam_title)
                     
-                    if "PLACEHOLDER" in upper_p_text:
-                        # Clear this line out completely
-                        paragraph.text = "" 
-                        
-                        # Match the specific placeholder word on this line
-                        if "SUBJECT" in upper_p_text:
-                            text_to_write = subject
-                        elif "GRADE" in upper_p_text:
-                            text_to_write = grade
-                        elif "DATE" in upper_p_text:
-                            text_to_write = date
-                        elif "MARKS" in upper_p_text:
-                            text_to_write = marks
-                        elif "EXAM" in upper_p_text:
-                            text_to_write = exam_title
-                        else:
-                            text_to_write = ""
+                    # Fix font for any modified lines
+                    if len(paragraph.runs) > 0:
+                        for run in paragraph.runs:
+                            run.font.name = 'Times New Roman'
+                            run.font.bold = True
 
-                        # Inject the user input value cleanly
-                        run = paragraph.add_run(text_to_write)
-                        run.font.name = 'Times New Roman'
-                        run.font.size = Pt(11)
-                        run.font.bold = True
-
-    # Clear instructions placeholder strings below the header box
+    # Clear instructions placeholder text below the header box
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
