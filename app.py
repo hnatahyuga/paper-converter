@@ -59,37 +59,39 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    # ACCORDIAN FORCE-MATCH FIX: Searches using fuzzy text queries across the whole cell block
+    # DEEP PARAGRAPH LOOP FIX
+    # This checks every single line/paragraph inside every single cell
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                # Combine all text pieces inside the cell to check content safely
-                full_cell_text = "".join(p.text for p in cell.paragraphs).upper()
-                
-                if "PLACEHOLDER" in full_cell_text:
-                    p = cell.paragraphs[0]
-                    p.text = "" # Wipe out old broken segments entirely
+                for paragraph in cell.paragraphs:
+                    upper_p_text = paragraph.text.upper()
                     
-                    if "SUBJECT" in full_cell_text:
-                        text_to_write = f"SUBJECT : {subject}"
-                    elif "GRADE" in full_cell_text:
-                        text_to_write = f"GRADE : {grade}"
-                    elif "DATE" in full_cell_text:
-                        text_to_write = f"DATE : {date}"
-                    elif "MARKS" in full_cell_text:
-                        text_to_write = f"MARKS : {marks}"
-                    elif "EXAM" in full_cell_text:
-                        text_to_write = exam_title
-                    else:
-                        text_to_write = ""
+                    if "PLACEHOLDER" in upper_p_text:
+                        # Clear this line out completely
+                        paragraph.text = "" 
+                        
+                        # Match the specific placeholder word on this line
+                        if "SUBJECT" in upper_p_text:
+                            text_to_write = subject
+                        elif "GRADE" in upper_p_text:
+                            text_to_write = grade
+                        elif "DATE" in upper_p_text:
+                            text_to_write = date
+                        elif "MARKS" in upper_p_text:
+                            text_to_write = marks
+                        elif "EXAM" in upper_p_text:
+                            text_to_write = exam_title
+                        else:
+                            text_to_write = ""
 
-                    # Re-write text as a single, clean element block
-                    run = p.add_run(text_to_write)
-                    run.font.name = 'Times New Roman'
-                    run.font.size = Pt(11)
-                    run.font.bold = True
+                        # Inject the user input value cleanly
+                        run = paragraph.add_run(text_to_write)
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(11)
+                        run.font.bold = True
 
-    # Clear instructions text below the header box
+    # Clear instructions placeholder strings below the header box
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
