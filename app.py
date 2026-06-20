@@ -132,4 +132,75 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
             mark_match = re.search(r'\(\d{2}\)$', clean_line)
             if mark_match:
                 mark_text = mark_match.group(0)
-                instruction_text = clean_line
+                instruction_text = clean_line[:mark_match.start()].strip()
+                run = p.add_run(instruction_text)
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(14)
+                run.bold = True
+                p.paragraph_format.tab_stops.add_tab_stop(Inches(6.2), docx.enum.text.WD_TAB_ALIGNMENT.RIGHT)
+                run_mark = p.add_run(f"\t{mark_text}")
+                run_mark.font.name = 'Times New Roman'
+                run_mark.font.size = Pt(14)
+                run_mark.bold = True
+            else:
+                run = p.add_run(clean_line)
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(14)
+                run.bold = True
+        elif has_explicit_options:
+            extracted = split_mcq_options(clean_line)
+            current_options.extend(extracted)
+        else:
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(4)
+            p.paragraph_format.space_after = Pt(2)
+            run = p.add_run(clean_line)
+            run.font.name = 'Times New Roman'
+            run.font.size = Pt(12)
+
+    if current_options:
+        add_options_grid(doc, current_options)
+
+    target_stream = io.BytesIO()
+    doc.save(target_stream)
+    target_stream.seek(0)
+    return target_stream
+
+# --- STREAMLIT USER INTERFACE ---
+st.set_page_config(page_title="Exam Paper Formatter", page_icon="📄")
+st.title("📄 K N Patel Exam Converter")
+st.write("Fill out the exam variables below, upload the raw PDF, and generate your custom formatted Word file instantly.")
+
+col1, col2 = st.columns(2)
+with col1:
+    subject_input = st.text_input("Subject Name", value="S.P.C.C.")
+    grade_input = st.text_input("Grade / Standard", value="11th GSEB")
+    exam_title_input = st.text_input("Examination Title Box", value="FA – 1 Examination\n[2026-27]")
+with col2:
+    date_input = st.text_input("Date of Exam", value="24-06-2026")
+    marks_input = st.text_input("Total Marks", value="30")
+
+uploaded_pdf = st.file_uploader("Upload Raw PDF Question Paper", type=["pdf"])
+
+if uploaded_pdf:
+    if st.button("✨ Convert Document Now"):
+        with st.spinner("Processing custom formatting rules..."):
+            try:
+                output_docx = process_paper(
+                    uploaded_pdf, 
+                    "template.docx", 
+                    subject_input, 
+                    grade_input, 
+                    date_input, 
+                    marks_input,
+                    exam_title_input
+                )
+                st.success("🎉 Conversion Complete!")
+                st.download_button(
+                    label="📥 Download Formatted Word Document",
+                    data=output_docx,
+                    file_name=f"Formatted_{subject_input}_Paper.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+            except Exception as e:
+                st.error(f"Something went wrong: {e}")
