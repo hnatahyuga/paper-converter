@@ -59,38 +59,37 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    # ADVANCED SEARCH & REPLACE ENGINE
-    # This directly forces replacement regardless of Word's hidden formatting breaks
+    # ACCORDIAN FORCE-MATCH FIX: Searches using fuzzy text queries across the whole cell block
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                # Read the full combined plain text of the cell
-                cell_text = "".join(p.text for p in cell.paragraphs)
+                # Combine all text pieces inside the cell to check content safely
+                full_cell_text = "".join(p.text for p in cell.paragraphs).upper()
                 
-                if "PLACEHOLDER_SUBJECT" in cell_text or "PLACEHOLDER_GRADE" in cell_text or "PLACEHOLDER_DATE" in cell_text or "PLACEHOLDER_MARKS" in cell_text or "PLACEHOLDER_EXAM" in cell_text:
-                    # Clear out the broken segments completely
+                if "PLACEHOLDER" in full_cell_text:
                     p = cell.paragraphs[0]
-                    p.text = "" 
+                    p.text = "" # Wipe out old broken segments entirely
                     
-                    # Determine what value to insert
-                    if "PLACEHOLDER_SUBJECT" in cell_text:
+                    if "SUBJECT" in full_cell_text:
                         text_to_write = f"SUBJECT : {subject}"
-                    elif "PLACEHOLDER_GRADE" in cell_text:
+                    elif "GRADE" in full_cell_text:
                         text_to_write = f"GRADE : {grade}"
-                    elif "PLACEHOLDER_DATE" in cell_text:
+                    elif "DATE" in full_cell_text:
                         text_to_write = f"DATE : {date}"
-                    elif "PLACEHOLDER_MARKS" in cell_text:
+                    elif "MARKS" in full_cell_text:
                         text_to_write = f"MARKS : {marks}"
-                    elif "PLACEHOLDER_EXAM" in cell_text:
+                    elif "EXAM" in full_cell_text:
                         text_to_write = exam_title
-                    
-                    # Re-write the full text cleanly as a single segment
+                    else:
+                        text_to_write = ""
+
+                    # Re-write text as a single, clean element block
                     run = p.add_run(text_to_write)
                     run.font.name = 'Times New Roman'
                     run.font.size = Pt(11)
                     run.font.bold = True
 
-    # Clear instructions text below the header
+    # Clear instructions text below the header box
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
