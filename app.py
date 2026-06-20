@@ -59,27 +59,38 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    # PLACEHOLDER TEXT SEARCH AND REPLACE ENGINE
+    # ADVANCED SEARCH & REPLACE ENGINE
+    # This directly forces replacement regardless of Word's hidden formatting breaks
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                if "PLACEHOLDER_SUBJECT" in cell.text:
-                    cell.paragraphs[0].text = f"SUBJECT : {subject}"
-                elif "PLACEHOLDER_GRADE" in cell.text:
-                    cell.paragraphs[0].text = f"GRADE : {grade}"
-                elif "PLACEHOLDER_DATE" in cell.text:
-                    cell.paragraphs[0].text = f"DATE : {date}"
-                elif "PLACEHOLDER_MARKS" in cell.text:
-                    cell.paragraphs[0].text = f"MARKS : {marks}"
-                elif "PLACEHOLDER_EXAM" in cell.text:
-                    cell.paragraphs[0].text = exam_title
+                # Read the full combined plain text of the cell
+                cell_text = "".join(p.text for p in cell.paragraphs)
                 
-                # Apply consistent styling to updated cells
-                if len(cell.paragraphs[0].runs) > 0:
-                    cell.paragraphs[0].runs[0].font.name = 'Times New Roman'
-                    cell.paragraphs[0].runs[0].font.bold = True
+                if "PLACEHOLDER_SUBJECT" in cell_text or "PLACEHOLDER_GRADE" in cell_text or "PLACEHOLDER_DATE" in cell_text or "PLACEHOLDER_MARKS" in cell_text or "PLACEHOLDER_EXAM" in cell_text:
+                    # Clear out the broken segments completely
+                    p = cell.paragraphs[0]
+                    p.text = "" 
+                    
+                    # Determine what value to insert
+                    if "PLACEHOLDER_SUBJECT" in cell_text:
+                        text_to_write = f"SUBJECT : {subject}"
+                    elif "PLACEHOLDER_GRADE" in cell_text:
+                        text_to_write = f"GRADE : {grade}"
+                    elif "PLACEHOLDER_DATE" in cell_text:
+                        text_to_write = f"DATE : {date}"
+                    elif "PLACEHOLDER_MARKS" in cell_text:
+                        text_to_write = f"MARKS : {marks}"
+                    elif "PLACEHOLDER_EXAM" in cell_text:
+                        text_to_write = exam_title
+                    
+                    # Re-write the full text cleanly as a single segment
+                    run = p.add_run(text_to_write)
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(11)
+                    run.font.bold = True
 
-    # Clear instructions placeholder strings below the header
+    # Clear instructions text below the header
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
@@ -121,75 +132,4 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
             mark_match = re.search(r'\(\d{2}\)$', clean_line)
             if mark_match:
                 mark_text = mark_match.group(0)
-                instruction_text = clean_line[:mark_match.start()].strip()
-                run = p.add_run(instruction_text)
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(14)
-                run.bold = True
-                p.paragraph_format.tab_stops.add_tab_stop(Inches(6.2), docx.enum.text.WD_TAB_ALIGNMENT.RIGHT)
-                run_mark = p.add_run(f"\t{mark_text}")
-                run_mark.font.name = 'Times New Roman'
-                run_mark.font.size = Pt(14)
-                run_mark.bold = True
-            else:
-                run = p.add_run(clean_line)
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(14)
-                run.bold = True
-        elif has_explicit_options:
-            extracted = split_mcq_options(clean_line)
-            current_options.extend(extracted)
-        else:
-            p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(4)
-            p.paragraph_format.space_after = Pt(2)
-            run = p.add_run(clean_line)
-            run.font.name = 'Times New Roman'
-            run.font.size = Pt(12)
-
-    if current_options:
-        add_options_grid(doc, current_options)
-
-    target_stream = io.BytesIO()
-    doc.save(target_stream)
-    target_stream.seek(0)
-    return target_stream
-
-# --- STREAMLIT USER INTERFACE ---
-st.set_page_config(page_title="Exam Paper Formatter", page_icon="📄")
-st.title("📄 K N Patel Exam Converter")
-st.write("Fill out the exam variables below, upload the raw PDF, and generate your custom formatted Word file instantly.")
-
-col1, col2 = st.columns(2)
-with col1:
-    subject_input = st.text_input("Subject Name", value="S.P.C.C.")
-    grade_input = st.text_input("Grade / Standard", value="11th GSEB")
-    exam_title_input = st.text_input("Examination Title Box", value="FA – 1 Examination\n[2026-27]")
-with col2:
-    date_input = st.text_input("Date of Exam", value="24-06-2026")
-    marks_input = st.text_input("Total Marks", value="30")
-
-uploaded_pdf = st.file_uploader("Upload Raw PDF Question Paper", type=["pdf"])
-
-if uploaded_pdf:
-    if st.button("✨ Convert Document Now"):
-        with st.spinner("Processing custom formatting rules..."):
-            try:
-                output_docx = process_paper(
-                    uploaded_pdf, 
-                    "template.docx", 
-                    subject_input, 
-                    grade_input, 
-                    date_input, 
-                    marks_input,
-                    exam_title_input
-                )
-                st.success("🎉 Conversion Complete!")
-                st.download_button(
-                    label="📥 Download Formatted Word Document",
-                    data=output_docx,
-                    file_name=f"Formatted_{subject_input}_Paper.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-            except Exception as e:
-                st.error(f"Something went wrong: {e}")
+                instruction_text = clean_line
