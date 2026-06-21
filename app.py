@@ -6,13 +6,18 @@ import re
 import io
 
 def split_mcq_options(line):
-    matches = list(re.finditer(r'\b([A-D])\.\s', line))
+    # SMART FIX: Find any option letter glued to the previous word (e.g., "processB. ") and inject a space
+    cleaned_line = re.sub(r'([^\s])([A-D])\.\s', r'\1 \2. ', line)
+    
+    # Find positions where option letters start in the cleaned text line
+    matches = list(re.finditer(r'([A-D])\.\s', cleaned_line))
     if not matches: return []
+    
     options = []
     for i in range(len(matches)):
         start = matches[i].start()
-        end = matches[i+1].start() if i + 1 < len(matches) else len(line)
-        options.append(line[start:end].strip())
+        end = matches[i+1].start() if i + 1 < len(matches) else len(cleaned_line)
+        options.append(cleaned_line[start:end].strip())
     return options
 
 def add_options_grid(doc, options):
@@ -50,7 +55,6 @@ def add_options_grid(doc, options):
             tcPr.append(tcBorders)
 
 def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title):
-    """Scans a list of tables and replaces the short tags safely"""
     for table in tables:
         for row in table.rows:
             for cell in row.cells:
@@ -81,13 +85,10 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    # FIX: Scan regular body tables
     replace_tags_in_tables(doc.tables, subject, grade, date, marks, exam_title)
     
-    # CRITICAL FIX: Scan tables hidden inside the Word PAGE HEADERS
     for section in doc.sections:
         replace_tags_in_tables(section.header.tables, subject, grade, date, marks, exam_title)
-        # Also check "first page header" settings if applicable
         if section.first_page_header:
             replace_tags_in_tables(section.first_page_header.tables, subject, grade, date, marks, exam_title)
 
@@ -105,7 +106,8 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
         if re.match(r'^\(\d+\)$', clean_line):
             continue
 
-        has_explicit_options = bool(re.search(r'\b[A-D]\.\s', clean_line))
+        # Detect if this line contains explicit option tags (even if glued together)
+        has_explicit_options = bool(re.search(r'[A-D]\.\s', clean_line))
         is_broken_continuation = len(current_options) > 0 and not has_explicit_options and not re.match(r'^\d+\.', clean_line) and "SECTION -" not in upper_line and "►" not in clean_line
 
         if is_broken_continuation:
