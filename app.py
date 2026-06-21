@@ -6,10 +6,9 @@ import re
 import io
 
 def split_mcq_options(line):
-    # SMART FIX: Find any option letter glued to the previous word (e.g., "processB. ") and inject a space
+    # Find any option letter glued to the previous word and inject a space
     cleaned_line = re.sub(r'([^\s])([A-D])\.\s', r'\1 \2. ', line)
     
-    # Find positions where option letters start in the cleaned text line
     matches = list(re.finditer(r'([A-D])\.\s', cleaned_line))
     if not matches: return []
     
@@ -106,7 +105,6 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
         if re.match(r'^\(\d+\)$', clean_line):
             continue
 
-        # Detect if this line contains explicit option tags (even if glued together)
         has_explicit_options = bool(re.search(r'[A-D]\.\s', clean_line))
         is_broken_continuation = len(current_options) > 0 and not has_explicit_options and not re.match(r'^\d+\.', clean_line) and "SECTION -" not in upper_line and "►" not in clean_line
 
@@ -162,6 +160,19 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     if current_options:
         add_options_grid(doc, current_options)
+
+    # NEW FOOTER ADDITION FIX: Injects a blank spacing line and adds styled sign-off text centered at the bottom
+    doc.add_paragraph() # Single clean empty paragraph line break
+    
+    p_footer = doc.add_paragraph()
+    p_footer.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+    p_footer.paragraph_format.space_before = Pt(12)
+    
+    run_footer = p_footer.add_run("ALL THE BEST")
+    run_footer.font.name = 'Aptos Display'
+    run_footer.font.size = Pt(20)
+    run_footer.bold = True
+    run_footer.italic = True
 
     target_stream = io.BytesIO()
     doc.save(target_stream)
