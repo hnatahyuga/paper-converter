@@ -6,7 +6,7 @@ import re
 import io
 
 def split_mcq_options(line):
-    # Find any option letter glued to the previous word and inject a space
+    # Fix any option letter glued to the previous word and inject a space
     cleaned_line = re.sub(r'([^\s])([A-D])\.\s', r'\1 \2. ', line)
     
     matches = list(re.finditer(r'([A-D])\.\s', cleaned_line))
@@ -59,20 +59,28 @@ def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title):
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
                     if "[SUB]" in paragraph.text:
-                        paragraph.text = paragraph.text.replace("[SUB]", subject)
-                    elif "[GRD]" in paragraph.text:
-                        paragraph.text = paragraph.text.replace("[GRD]", grade)
-                    elif "[DT]" in paragraph.text:
-                        paragraph.text = paragraph.text.replace("[DT]", date)
-                    elif "[MRK]" in paragraph.text:
-                        paragraph.text = paragraph.text.replace("[MRK]", marks)
-                    elif "[EXM]" in paragraph.text:
-                        paragraph.text = paragraph.text.replace("[EXM]", exam_title)
-                    
-                    if len(paragraph.runs) > 0:
+                        # SURGICAL TEXT SWAP: Keeps existing runs/formatting/borders completely safe
                         for run in paragraph.runs:
-                            run.font.name = 'Times New Roman'
-                            run.font.bold = True
+                            if "[SUB]" in run.text:
+                                run.text = run.text.replace("[SUB]", subject)
+                    elif "[GRD]" in paragraph.text:
+                        for run in paragraph.runs:
+                            if "[GRD]" in run.text:
+                                run.text = run.text.replace("[GRD]", grade)
+                    elif "[DT]" in paragraph.text:
+                        for run in paragraph.runs:
+                            if "[DT]" in run.text:
+                                run.text = run.text.replace("[DT]", date)
+                    elif "[MRK]" in paragraph.text:
+                        for run in paragraph.runs:
+                            if "[MRK]" in run.text:
+                                run.text = run.text.replace("[MRK]", marks)
+                    elif "[EXM]" in paragraph.text:
+                        # Clear paragraph runs cleanly for the multi-line Exam Box title input
+                        paragraph.text = ""
+                        run = paragraph.add_run(exam_title)
+                        run.font.name = 'Times New Roman'
+                        run.font.bold = True
 
 def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_title):
     reader = pypdf.PdfReader(pdf_file)
@@ -84,13 +92,16 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
+    # Process text styling swaps inside the main template grid body
     replace_tags_in_tables(doc.tables, subject, grade, date, marks, exam_title)
     
+    # Process text styling swaps inside page headers
     for section in doc.sections:
         replace_tags_in_tables(section.header.tables, subject, grade, date, marks, exam_title)
         if section.first_page_header:
             replace_tags_in_tables(section.first_page_header.tables, subject, grade, date, marks, exam_title)
 
+    # Clear instructions text below the header box
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
@@ -161,9 +172,8 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
     if current_options:
         add_options_grid(doc, current_options)
 
-    # NEW FOOTER ADDITION FIX: Injects a blank spacing line and adds styled sign-off text centered at the bottom
-    doc.add_paragraph() # Single clean empty paragraph line break
-    
+    # Footer sign-off text entry
+    doc.add_paragraph()
     p_footer = doc.add_paragraph()
     p_footer.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
     p_footer.paragraph_format.space_before = Pt(12)
