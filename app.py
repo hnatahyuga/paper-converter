@@ -51,13 +51,38 @@ def add_options_grid(doc, options):
                 tcBorders.append(b)
             tcPr.append(tcBorders)
 
-def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title):
+def enforce_cell_borders(cell):
+    """Surgically injects explicit solid black borders to ensure vertical lines print perfectly"""
+    tcPr = cell._tc.get_or_add_tcPr()
+    
+    # Clear out any old border configurations that might cause conflicts
+    for child in list(tcPr):
+        if child.tag.endswith('tcBorders'):
+            tcPr.remove(child)
+            
+    tcBorders = docx.oxml.OxmlElement('w:tcBorders')
+    
+    # Set explicit borders (single line, 4-eighths of a point thick, dark color)
+    borders_config = ['top', 'left', 'bottom', 'right']
+    for b_name in borders_config:
+        b = docx.oxml.OxmlElement(f'w:{b_name}')
+        b.set(docx.oxml.ns.qn('w:val'), 'single')
+        b.set(docx.oxml.ns.qn('w:sz'), '4') 
+        b.set(docx.oxml.ns.qn('w:space'), '0')
+        b.set(docx.oxml.ns.qn('w:color'), 'auto')
+        tcBorders.append(b)
+        
+    tcPr.append(tcBorders)
+
+def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title, fix_borders=False):
     for table in tables:
         for row in table.rows:
             for cell in row.cells:
+                # If it's a header table, firmly re-lock its cell borders in place
+                if fix_borders:
+                    enforce_cell_borders(cell)
+                    
                 for paragraph in cell.paragraphs:
-                    # XML SAFE REPLACEMENT METHOD
-                    # Intercepts text directly without modifying paragraph objects, cells, or borders
                     if "[SUB]" in paragraph.text:
                         for run in paragraph.runs:
                             if "[SUB]" in run.text:
@@ -75,8 +100,6 @@ def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title):
                             if "[MRK]" in run.text:
                                 run.text = run.text.replace("[MRK]", marks)
                     elif "[EXM]" in paragraph.text:
-                        # For the complex multi-line Exam block text box, we clear text safely 
-                        # and instantly override text tokens using local system fonts
                         paragraph.text = ""
                         run = paragraph.add_run(exam_title)
                         run.font.name = 'Times New Roman'
@@ -92,14 +115,16 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    replace_tags_in_tables(doc.tables, subject, grade, date, marks, exam_title)
+    # Process regular body tables
+    replace_tags_in_tables(doc.tables, subject, grade, date, marks, exam_title, fix_borders=True)
     
+    # Process header tables with explicit border protection activated
     for section in doc.sections:
-        replace_tags_in_tables(section.header.tables, subject, grade, date, marks, exam_title)
+        replace_tags_in_tables(section.header.tables, subject, grade, date, marks, exam_title, fix_borders=True)
         if section.first_page_header:
-            replace_tags_in_tables(section.first_page_header.tables, subject, grade, date, marks, exam_title)
+            replace_tags_in_tables(section.first_page_header.tables, subject, grade, date, marks, exam_title, fix_borders=True)
 
-    # Clear out instruction text markers below your template header
+    # Clear instructions text below the header box
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
@@ -170,7 +195,7 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
     if current_options:
         add_options_grid(doc, current_options)
 
-    # Footer sign-off text string entry layout
+    # Add spacing and footer sign-off text string entry layout
     doc.add_paragraph()
     p_footer = doc.add_paragraph()
     p_footer.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
