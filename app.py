@@ -6,9 +6,7 @@ import re
 import io
 
 def split_mcq_options(line):
-    # Fix any option letter glued to the previous word and inject a space
     cleaned_line = re.sub(r'([^\s])([A-D])\.\s', r'\1 \2. ', line)
-    
     matches = list(re.finditer(r'([A-D])\.\s', cleaned_line))
     if not matches: return []
     
@@ -58,8 +56,9 @@ def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title):
         for row in table.rows:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
+                    # XML SAFE REPLACEMENT METHOD
+                    # Intercepts text directly without modifying paragraph objects, cells, or borders
                     if "[SUB]" in paragraph.text:
-                        # SURGICAL TEXT SWAP: Keeps existing runs/formatting/borders completely safe
                         for run in paragraph.runs:
                             if "[SUB]" in run.text:
                                 run.text = run.text.replace("[SUB]", subject)
@@ -76,7 +75,8 @@ def replace_tags_in_tables(tables, subject, grade, date, marks, exam_title):
                             if "[MRK]" in run.text:
                                 run.text = run.text.replace("[MRK]", marks)
                     elif "[EXM]" in paragraph.text:
-                        # Clear paragraph runs cleanly for the multi-line Exam Box title input
+                        # For the complex multi-line Exam block text box, we clear text safely 
+                        # and instantly override text tokens using local system fonts
                         paragraph.text = ""
                         run = paragraph.add_run(exam_title)
                         run.font.name = 'Times New Roman'
@@ -92,16 +92,14 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
 
     doc = docx.Document(template_path)
     
-    # Process text styling swaps inside the main template grid body
     replace_tags_in_tables(doc.tables, subject, grade, date, marks, exam_title)
     
-    # Process text styling swaps inside page headers
     for section in doc.sections:
         replace_tags_in_tables(section.header.tables, subject, grade, date, marks, exam_title)
         if section.first_page_header:
             replace_tags_in_tables(section.first_page_header.tables, subject, grade, date, marks, exam_title)
 
-    # Clear instructions text below the header box
+    # Clear out instruction text markers below your template header
     while len(doc.paragraphs) > 0:
         p_to_remove = doc.paragraphs[-1]
         p_to_remove._element.getparent().remove(p_to_remove._element)
@@ -172,7 +170,7 @@ def process_paper(pdf_file, template_path, subject, grade, date, marks, exam_tit
     if current_options:
         add_options_grid(doc, current_options)
 
-    # Footer sign-off text entry
+    # Footer sign-off text string entry layout
     doc.add_paragraph()
     p_footer = doc.add_paragraph()
     p_footer.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
